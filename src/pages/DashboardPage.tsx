@@ -1,21 +1,19 @@
+import { useMemo } from 'react'
 import { Button, Progress, Space, Tag, Typography } from 'antd'
 import { ArrowRightOutlined, CheckCircleOutlined, ClockCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { useIssues } from '../api/useIssues'
 import { useWorkspaceStore } from '../store/useWorkspaceStore'
+import { computeOverview } from '../utils/stats'
 
 export default function DashboardPage() {
   useIssues()
   const issues = useWorkspaceStore((state) => state.issues)
+  const statsVersion = useWorkspaceStore((state) => state.statsVersion)
   const navigate = useNavigate()
-  const open = issues.filter((item) => !['已通过', '不适用'].includes(item.status))
-  const passed = issues.filter((item) => item.status === '已通过').length
-  const critical = issues.filter((item) => item.impact === '致命' || item.impact === '严重').length
-  const coverage = Math.round((passed / issues.length) * 100)
-  const bySite = Array.from(new Set(issues.map((item) => item.site))).map((site) => {
-    const items = issues.filter((issue) => issue.site === site)
-    return { site, total: items.length, passed: items.filter((item) => item.status === '已通过').length }
-  })
+  // 成员变化时旧统计失效，按当前成员（根因组）重算总览。
+  const stats = useMemo(() => computeOverview(issues), [issues, statsVersion])
+  const { open, passed, critical, coverage, bySite } = stats
 
   return (
     <section className="page">
@@ -32,9 +30,9 @@ export default function DashboardPage() {
       </div>
 
       <div className="metric-grid">
-        <div className="metric-card"><span>开放问题</span><strong>{open.length}</strong><small>{issues.length} 条总记录</small></div>
+        <div className="metric-card"><span>开放问题</span><strong>{open}</strong><small>{stats.total} 个整改项</small></div>
         <div className="metric-card"><span>严重 / 致命</span><strong style={{ color: '#b84f32' }}>{critical}</strong><small>需优先排期</small></div>
-        <div className="metric-card"><span>复测通过率</span><strong>{coverage}%</strong><small>当前版本口径</small></div>
+        <div className="metric-card"><span>复测通过率</span><strong>{coverage}%</strong><small>当前成员口径</small></div>
         <div className="metric-card"><span>覆盖站点</span><strong>{bySite.length}</strong><small>统一 WCAG 2.2 AA</small></div>
       </div>
 

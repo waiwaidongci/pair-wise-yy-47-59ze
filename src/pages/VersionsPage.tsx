@@ -1,21 +1,28 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, Checkbox, Select, Space, Table, Tag, Typography, message } from 'antd'
 import { useIssues } from '../api/useIssues'
 import { useWorkspaceStore } from '../store/useWorkspaceStore'
+import { isRootIssue } from '../utils/stats'
 
 export default function VersionsPage() {
   useIssues()
   const issues = useWorkspaceStore((state) => state.issues)
+  const statsVersion = useWorkspaceStore((state) => state.statsVersion)
   const [accepted, setAccepted] = useState<string[]>(['A11Y-1074'])
-  const diffs = issues
-    .filter((item) => ['A11Y-1048', 'A11Y-1074', 'A11Y-1083'].includes(item.key))
-    .map((issue, index) => ({
-      key: issue.key,
-      field: index === 0 ? '修复状态' : index === 1 ? '图表色板' : '错误提示实现',
-      baseline: index === 0 ? '待复测' : index === 1 ? '#98B7AF / 对比度 2.6:1' : '视觉错误颜色',
-      candidate: index === 0 ? '已提交复测材料' : index === 1 ? '#1D6570 / 对比度 5.1:1 + 纹理' : 'aria-live + aria-describedby',
-      risk: index === 2 ? '中' : '低',
-    }))
+  // 成员变化时旧差异失效，按当前成员（根因组）重算版本差异。
+  const diffs = useMemo(
+    () =>
+      issues
+        .filter((item) => isRootIssue(item, issues))
+        .map((item) => ({
+          key: item.key,
+          field: item.rootCause,
+          baseline: item.status,
+          candidate: item.fixNote ?? '待提交',
+          risk: item.impact === '致命' || item.impact === '严重' ? '高' : item.impact === '中等' ? '中' : '低',
+        })),
+    [issues, statsVersion],
+  )
 
   const toggle = (key: string, checked: boolean) => {
     setAccepted((current) => checked ? [...new Set([...current, key])] : current.filter((item) => item !== key))

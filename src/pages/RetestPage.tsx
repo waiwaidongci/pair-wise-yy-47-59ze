@@ -1,16 +1,19 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Alert, Button, Descriptions, Form, Input, Radio, Space, Table, Tag, Typography, message } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import axios from 'axios'
 import { useIssues } from '../api/useIssues'
 import { useWorkspaceStore } from '../store/useWorkspaceStore'
 import type { Issue } from '../api/types'
+import { computeRetestQueue } from '../utils/stats'
 
 export default function RetestPage() {
   useIssues()
   const issues = useWorkspaceStore((state) => state.issues)
+  const statsVersion = useWorkspaceStore((state) => state.statsVersion)
   const updateIssue = useWorkspaceStore((state) => state.updateIssue)
-  const queue = issues.filter((item) => ['待复测', '已退回'].includes(item.status))
+  // 成员变化时旧队列失效，按当前成员重算复测队列。
+  const queue = useMemo(() => computeRetestQueue(issues), [issues, statsVersion])
   const [active, setActive] = useState<Issue | null>(queue[0] ?? null)
   const [form] = Form.useForm()
 

@@ -1,16 +1,19 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Button, Checkbox, Select, Space, Tag, Typography, message } from 'antd'
 import { DownloadOutlined, FilePdfOutlined } from '@ant-design/icons'
 import { useIssues } from '../api/useIssues'
 import { useWorkspaceStore } from '../store/useWorkspaceStore'
+import { computeReportRows } from '../utils/stats'
 
 export default function ReportPage() {
   useIssues()
   const issues = useWorkspaceStore((state) => state.issues)
+  const statsVersion = useWorkspaceStore((state) => state.statsVersion)
   const [site, setSite] = useState('全部站点')
   const [includeEvidence, setIncludeEvidence] = useState(true)
   const [includeHistory, setIncludeHistory] = useState(true)
-  const visible = issues.filter((item) => site === '全部站点' || item.site === site)
+  // 成员变化时旧报告失效，按当前成员重算报告行。
+  const visible = useMemo(() => computeReportRows(issues, site), [issues, site, statsVersion])
 
   const exportCsv = () => {
     const rows = [

@@ -24,7 +24,7 @@ const impactColor: Record<string, string> = { 致命: 'red', 严重: 'volcano', 
 const statusColor: Record<string, string> = { 待分配: 'default', 修复中: 'processing', 待复测: 'orange', 已通过: 'success', 已退回: 'error', 不适用: 'default' }
 
 export default function IssuesPage() {
-  useIssues()
+  const { refetch } = useIssues()
   const issues = useWorkspaceStore((state) => state.issues)
   const selectedKeys = useWorkspaceStore((state) => state.selectedKeys)
   const setSelectedKeys = useWorkspaceStore((state) => state.setSelectedKeys)
@@ -133,7 +133,11 @@ export default function IssuesPage() {
               <dt>复现条件</dt><dd>{detail.reproduction}</dd>
               <dt>证据链接</dt><dd><Typography.Link href={detail.evidence} target="_blank">{detail.evidence}</Typography.Link></dd>
               <dt>根因</dt><dd>{detail.rootCause}</dd>
-              <dt>关联重复</dt><dd>{detail.mergedKeys.length ? detail.mergedKeys.join('、') : '无'}</dd>
+              <dt>关联重复</dt>
+              <dd>
+                {detail.parentKey ? `合并至 ${detail.parentKey}` : detail.mergedKeys.length ? `子项 ${detail.mergedKeys.join('、')}` : '无'}
+                {detail.parentKey && detail.mergedKeys.length ? `；子项 ${detail.mergedKeys.join('、')}` : ''}
+              </dd>
               <dt>修复说明</dt><dd>{detail.fixNote ?? '开发尚未提交'}</dd>
               <dt>复测环境</dt><dd>{detail.retestEnv ?? '待开发提交'}</dd>
             </dl>
@@ -162,8 +166,36 @@ export default function IssuesPage() {
         </Form>
       </Modal>
 
-      <Modal title="合并为同一整改项" open={mergeOpen} onCancel={() => setMergeOpen(false)} onOk={() => { mergeIssues(selectedKeys); setMergeOpen(false); message.success('问题已按根因合并，子项仍可追溯') }} okText="确认合并">
-        <Typography.Paragraph>将以 <Typography.Text code>{selectedKeys[0]}</Typography.Text> 为主问题，其余 {selectedKeys.length - 1} 项保留历史并关联到该主问题。</Typography.Paragraph>
+      <Modal
+        title="合并为同一整改项"
+        open={mergeOpen}
+        onCancel={() => setMergeOpen(false)}
+        onOk={async () => {
+          try {
+            await mergeIssues(selectedKeys)
+            setMergeOpen(false)
+            message.success('问题已按根因合并，子项仍可追溯')
+          } catch (error) {
+            const detail = error as { response?: { data?: { error?: string } } }
+            message.error(detail.response?.data?.error || '合并失败，请刷新后重试')
+            // 晚到的一方按最新成员版本核对：拉取最新成员后重新确认。
+            refetch()
+          }
+        }}
+        okText="确认合并"
+      >
+        <Typography.Paragraph>
+          将以 <Typography.Text code>{selectedKeys[0]}</Typography.Text> 为主问题，其余 {selectedKeys.length - 1} 项保留历史并关联到该主问题。
+        </Typography.Paragraph>
+        {(() => {
+          const primary = issues.find((item) => item.key === selectedKeys[0])
+          if (!primary) return null
+          return (
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+              当前成员版本 v{primary.memberVersion}：提交后将按此版本核对，若已被其他审核员更新则本次合并被拒绝。
+            </Typography.Paragraph>
+          )
+        })()}
         <Space wrap>{selectedKeys.map((key) => <Tag key={key}>{key}</Tag>)}</Space>
       </Modal>
     </section>
